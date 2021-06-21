@@ -16,13 +16,16 @@ def simplify(elevations, grid=50):
 	]
 
 def extrema(elevations):
+	is_ascending = None
 	yield elevations[0]
-	for a, b, c in zip(elevations, elevations[1:], elevations[2:]):
-		if b < a and b < c:
-			yield b
-		if b > a and b > c:
-			yield b
-	yield elevations[-1]
+	for previous, this in zip(elevations, elevations[1:]):
+		if is_ascending is True and previous > this:
+			yield previous
+		elif is_ascending is False and previous < this:
+			yield previous
+		if previous != this:
+			is_ascending = previous < this
+	yield this
 
 def gains(extrema):
 	for a, b in zip(extrema, extrema[1:]):
