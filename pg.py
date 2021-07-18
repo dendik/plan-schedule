@@ -7,9 +7,55 @@ ns = dict(gpx="http://www.topografix.com/GPX/1/1")
 
 args = argparse.ArgumentParser()
 args.add_argument('tracks', nargs='*')
+args.add_argument('-s', '--sort', help="Apply topological sort to track segments")
 args = args.parse_args()
 
-def simplify(elevations, grid=50):
+class Segment:
+	def __init__(self, segment_xml):
+		self.segment_xml = segment_xml
+		self.points = self.get_points()
+		self.elevations = self.get_elevations()
+		self.start = self.points[0]
+		self.end = self.points[-1]
+
+	def get_points(self):
+		return [
+			(float(point.get('lat')), float(point.get('lon')))
+			for point in self.segment_xml.findall('gpx:trkpt', ns)
+		]
+
+	def get_elevations(self):
+		return [
+			float(ele.text)
+			for ele in self.segment_xml.findall('gpx:trkpt/gpx:ele', ns)
+		]
+
+def segmentsort(segments):
+	segments = dict(enumerate(segments))
+	for n, segment in segments.items():
+		segment.n = n
+	closest = {
+		segment.n: min(segments.values(),
+			key=lambda other: haversine(segment.end, other.start))
+		for segment in segments.values()
+	}
+	incoming_distance = {
+		segment.n: min(
+			haversine(segment.start, other.end)
+			for other in segments.values())
+		for segment in segments.values()
+	}
+	first_n = max(incoming_distance, key=incoming_distance.__getitem__)
+	segment = segments[first_n]
+	seen = set()
+	while closest:
+		yield segment
+		seen.add(segment.n)
+		segment = closest.pop(segment.n)
+	if segment.n not in seen:
+		yield segment
+
+def simplify(elevations, grid=100):
 	return [
 		round(elevation / grid) * grid
 		for elevation in elevations
@@ -51,15 +97,12 @@ def length(points):
 
 for filename in args.tracks:
 	root = ET.parse(filename).getroot()
-	for n, segment in enumerate(root.findall('.//gpx:trkseg', ns), start=1):
-		elevations = [
-			float(ele.text)
-			for ele in segment.findall('gpx:trkpt/gpx:ele', ns)
-		]
-		points = [
-			(float(point.get('lat')), float(point.get('lon')))
-			for point in segment.findall('gpx:trkpt', ns)
-		]
+	segments = map(Segment, root.findall('.//gpx:trkseg', ns))
+	if args.sort:
+		segments = segmentsort(segments)
+	for n, segment in enumerate(segments, start=1):
+		elevations = segment.elevations
+		points = segment.points
 		ele_extrema = list(extrema(simplify(elevations)))
 		ele_gains = ",".join("{:+d}".format(gain) for gain in gains(ele_extrema))
 		print(filename, n, ele_extrema[-1], max(ele_extrema), "'" + ele_gains, "{:.1f}".format(length(points)), sep='\t')
