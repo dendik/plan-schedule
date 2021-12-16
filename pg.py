@@ -7,7 +7,8 @@ ns = dict(gpx="http://www.topografix.com/GPX/1/1")
 
 args = argparse.ArgumentParser()
 args.add_argument('tracks', nargs='*')
-args.add_argument('-s', '--sort', help="Apply topological sort to track segments")
+args.add_argument('-s', '--sort', action="store_true",
+	help="Apply topological sort to track segments")
 args = args.parse_args()
 
 class Segment:
