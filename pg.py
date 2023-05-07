@@ -83,13 +83,18 @@ if __name__ == "__main__":
             elevations = segment.elevations
             points = segment.points
             ele_extrema = list(extrema(simplify(elevations)))
-            ele_gains = ",".join("{:+d}".format(gain) for gain in gains(ele_extrema))
+            all_gains = list(gains(ele_extrema))
+            ele_gains = ",".join("{:+d}".format(gain) for gain in all_gains)
+            h_plus = sum(gain for gain in all_gains if gain > 0)
+            h_minus = sum(gain for gain in all_gains if gain < 0)
             print(
                 filename,
                 n,
                 ele_extrema[-1],
                 max(ele_extrema),
                 "'" + ele_gains,
+                h_plus,
+                h_minus,
                 "{:.1f}".format(length(points)),
                 sep="\t",
             )
