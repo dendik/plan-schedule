@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import xml.etree.ElementTree as ET
 import argparse
-import math
-from pathlib import Path
 
 ns = dict(gpx="http://www.topografix.com/GPX/1/1")
 
