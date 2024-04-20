@@ -468,6 +468,7 @@ class Point:
     Represent any point in a GPX file.
     """
 
+    type: str = ""
     latitude: float
     longitude: float
     elevation: Optional[float]
@@ -475,11 +476,11 @@ class Point:
 
     def __init__(
         self,
-        type: str,
         latitude: float,
         longitude: float,
         elevation: Optional[float] = None,
         timestamp: Optional[str] = None,
+        type: str = "",
     ):
         """
         Initialize a Point object.
@@ -490,7 +491,8 @@ class Point:
             elevation (float, optional): Elevation of the point. Defaults to None.
             timestamp (str, optional): Timestamp of the point. Defaults to None.
         """
-        self.type = type
+        self.type = self.type or type
+        assert self.type, "Trying to use abstract Point without specifying its type"
         self.latitude = latitude
         self.longitude = longitude
         self.elevation = elevation
@@ -512,7 +514,7 @@ class Point:
         longitude = float(xml_element.attrib["lon"])
         elevation = float(xml_element.findtext("gpx:ele", "NaN", GPX.nsmap))
         timestamp = xml_element.findtext("gpx:time", None, GPX.nsmap)
-        return cls(type, latitude, longitude, nan2none(elevation), timestamp)
+        return cls(latitude, longitude, nan2none(elevation), timestamp, type)
 
     def to_xml(self) -> Element:
         """
@@ -590,14 +592,7 @@ class WayPoint(Point):
     Represent a waypoint in a GPX file.
     """
 
-    def __init__(
-        self,
-        latitude: float,
-        longitude: float,
-        elevation: float | None = None,
-        timestamp: str | None = None,
-    ):
-        super().__init__("wpt", latitude, longitude, elevation, timestamp)
+    type = "wpt"
 
 
 class TrackPoint(Point):
@@ -605,14 +600,7 @@ class TrackPoint(Point):
     Represent a waypoint in a GPX file.
     """
 
-    def __init__(
-        self,
-        latitude: float,
-        longitude: float,
-        elevation: float | None = None,
-        timestamp: str | None = None,
-    ):
-        super().__init__("trkpt", latitude, longitude, elevation, timestamp)
+    type = "trkpt"
 
 
 class GPXElement(Element):
