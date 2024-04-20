@@ -1,48 +1,34 @@
 #!/usr/bin/env python3
-import xml.etree.ElementTree as ET
 import argparse
 from pathlib import Path
 
-ns = dict(gpx="http://www.topografix.com/GPX/1/1")
+from lib import GPX
 
-args = argparse.ArgumentParser()
-args.add_argument('-t', '--track')
-args.add_argument('-d', '--data-track')
-args.add_argument('-o', '--output')
-args = args.parse_args()
-
-if args.output is None:
-    args.output = Path(args.track).with_suffix("-with-data")
-
-track = ET.parse(args.track).getroot()
-data_track = ET.parse(args.data_track).getroot()
-ET.register_namespace('', ns['gpx'])
 
 def key(point):
-    return tuple(
-        f"{float(point.attrib[attr]):.6f}"
-        for attr in ('lat', 'lon')
-    )
+    return f"{float(point.latitude):.6f}" f"{float(point.longitude):.6f}"
 
-def replace(source, target):
-    tail = target.tail
-    target.clear()
-    target.attrib = source.attrib
-    target.text = source.text
-    target.tail = tail
-    for element in source:
-        target.append(element)
 
-data = {
-    key(point): point
-    for point in data_track.findall('.//gpx:trkpt', ns)
-}
-print(sorted(data))
-for point in track.findall('.//gpx:trkpt', ns):
-    data_point = data.get(key(point))
-    print(key(point), data_point)
-    if data_point is not None:
-        replace(data_point, point)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--track")
+    parser.add_argument("-d", "--data-track")
+    parser.add_argument("-o", "--output")
+    args = parser.parse_args()
 
-assert not Path(args.output).exists()
-ET.ElementTree(track).write(args.output, method='xml', xml_declaration=True, encoding='utf-8')
+    if args.output is None:
+        args.output = Path(args.track).with_suffix(".with-data.gpx")
+
+    data_points = {
+        key(point): point
+        for point in GPX.from_xml_path(args.data_track).itertrackpoints()
+    }
+
+    gpx = GPX.from_xml_path(args.track)
+    for point in gpx.itertrackpoints():
+        if (data_point := data_points.get(key(point))) is not None:
+            point.elevation = data_point.elevation
+            point.timestamp = data_point.timestamp
+
+    assert not Path(args.output).exists()
+    gpx.to_xml_path(args.output)

@@ -1,5 +1,6 @@
 import math
 import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from math import atan2
 from math import cos
 from math import radians
@@ -96,6 +97,26 @@ class GPX:
             tree.write(
                 file, encoding="utf-8", xml_declaration=True, default_namespace=self.ns
             )
+
+    def itertrackpoints(self) -> Iterator["Point"]:
+        """
+        Iterate over all points in the GPX file.
+
+        Yields:
+            Point: Each track point in the GPX file.
+        """
+        for segment in self.itersegments():
+            yield from segment.points
+
+    def itersegments(self) -> Iterator["Segment"]:
+        """
+        Iterate over all segments in the GPX file.
+
+        Yields:
+            Segment: Each segment in the GPX file.
+        """
+        for track in self.tracks:
+            yield from track.itersegments()
 
     def length(self) -> float:
         """
@@ -214,6 +235,25 @@ class Track:
                 self.segments.insert(n, segment_b)
                 self.segments.pop(n)
                 return
+
+    def itertrackpoints(self) -> Iterator["Point"]:
+        """
+        Iterate over all points in the track.
+
+        Yields:
+            Point: Each point in the track.
+        """
+        for segment in self.segments:
+            yield from segment.points
+
+    def itersegments(self) -> Iterator["Segment"]:
+        """
+        Iterate over all segments in the track.
+
+        Yields:
+            Segment: Each segment in the track.
+        """
+        yield from self.segments
 
     def length(self) -> float:
         """

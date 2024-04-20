@@ -13,9 +13,7 @@ if __name__ == "__main__":
 
     gpxes = [GPX.from_xml_path(gpx_path) for gpx_path in args.tracks]
 
-    segments = [
-        segment for gpx in gpxes for track in gpx.tracks for segment in track.segments
-    ]
+    segments = [segment for gpx in gpxes for segment in gpx.itersegments()]
 
     waypoints = [point for gpx in gpxes for point in gpx.waypoints]
 
