@@ -1,6 +1,3 @@
-"""GPX processing library
-"""
-
 import math
 import xml.etree.ElementTree as ET
 from math import atan2
