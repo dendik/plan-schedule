@@ -1,5 +1,6 @@
 """GPX processing library
 """
+
 import math
 import xml.etree.ElementTree as ET
 from math import atan2
@@ -99,6 +100,38 @@ class GPX:
         """
         return max(track.max_elevation() for track in self.tracks)
 
+    def elevation_gain(self) -> float:
+        """
+        Calculate the total elevation gain in all tracks of the GPX file.
+
+        Returns:
+            float: Total elevation gain in the GPX file.
+        """
+        return sum(track.elevation_gain() for track in self.tracks)
+
+    def elevation_loss(self) -> float:
+        """
+        Calculate the total elevation loss in all tracks of the GPX file.
+
+        Returns:
+            float: Total elevation loss in the GPX file.
+        """
+        return sum(track.elevation_loss() for track in self.tracks)
+
+    def elevation_changes(self, fuzz: float = 50) -> List[float]:
+        """
+        Calculate the elevation changes between local extrema in tracks of the GPX file, ignoring changes smaller than fuzz.
+
+        Args:
+            fuzz (float, optional): Threshold below which changes are ignored. Defaults to 50.
+
+        Returns:
+            List[float]: List of elevation changes.
+        """
+        return [
+            change for track in self.tracks for change in track.elevation_changes(fuzz)
+        ]
+
 
 class Track:
     """
@@ -184,6 +217,40 @@ class Track:
             float: Maximum elevation in the track.
         """
         return max(segment.max_elevation() for segment in self.segments)
+
+    def elevation_gain(self) -> float:
+        """
+        Calculate the total elevation gain in the track.
+
+        Returns:
+            float: Total elevation gain in the track.
+        """
+        return sum(segment.elevation_gain() for segment in self.segments)
+
+    def elevation_loss(self) -> float:
+        """
+        Calculate the total elevation loss in the track.
+
+        Returns:
+            float: Total elevation loss in the track.
+        """
+        return sum(segment.elevation_loss() for segment in self.segments)
+
+    def elevation_changes(self, fuzz: float = 50) -> List[float]:
+        """
+        Calculate the elevation changes between local extrema of the track, ignoring changes smaller than fuzz.
+
+        Args:
+            fuzz (float, optional): Threshold below which changes are ignored. Defaults to 50.
+
+        Returns:
+            List[float]: List of elevation changes.
+        """
+        return [
+            change
+            for segment in self.segments
+            for change in segment.elevation_changes(fuzz)
+        ]
 
 
 class Segment:
@@ -277,6 +344,97 @@ class Segment:
         return max(
             point.elevation for point in self.points if point.elevation is not None
         )
+
+    def elevation_gain(self) -> float:
+        """
+        Calculate the total elevation gain in the segment.
+
+        Returns:
+            float: Total elevation gain in the segment.
+        """
+        return sum(
+            max(0, elevation(point_b) - elevation(point_a))
+            for point_a, point_b in zip(self.points, self.points[1:])
+        )
+
+    def elevation_loss(self) -> float:
+        """
+        Calculate the total elevation loss in the segment.
+
+        Returns:
+            float: Total elevation loss in the segment.
+        """
+        return sum(
+            max(0, -elevation(point_b) + elevation(point_a))
+            for point_a, point_b in zip(self.points, self.points[1:])
+        )
+
+    def elevation_changes(self, fuzz: float = 50) -> List[float]:
+        """
+        Calculate the elevation changes between local extrema in the segment.
+
+        Args:
+            fuzz (float): Maximal magnitude of elevation change to be ignored.
+
+        Returns:
+            List[float]: List of elevation changes.
+        """
+        elevation_changes = [
+            elevation(point_b) - elevation(point_a)
+            for point_a, point_b in zip(self.points, self.points[1:])
+        ]
+        elevation_changes = self._simplify_elevation_changes(elevation_changes)
+        elevation_changes = self._defuzz_elevation_changes(elevation_changes, fuzz)
+        return elevation_changes
+
+    @staticmethod
+    def _simplify_elevation_changes(elevation_changes: List[float]) -> List[float]:
+        """
+        Simplify a list of elevation changes by merging consecutive changes with the same sign.
+
+        Args:
+            elevation_changes (List[float]): List of elevation changes.
+
+        Returns:
+            List[float]: Simplified list of elevation changes.
+        """
+        if not elevation_changes:
+            return []
+
+        simplified_changes = [elevation_changes[0]]
+        for change in elevation_changes[1:]:
+            if change * simplified_changes[-1] >= 0:
+                simplified_changes[-1] += change
+            else:
+                simplified_changes.append(change)
+
+        return simplified_changes
+
+    @staticmethod
+    def _defuzz_elevation_changes(
+        elevation_changes: List[float], fuzz: float
+    ) -> List[float]:
+        """
+        Simplify a list of elevation changes by merging changes smaller than `fuzz`.
+
+        Args:
+            elevation-changes (List[float]): List of elevation changes.
+            fuzz (float): magnitude of changes to be ignored.
+
+        Returns:
+            List[float]: Simplified list of elevation changes.
+        """
+        simplified_changes = [0.0]
+        for change in elevation_changes:
+            if abs(change) < fuzz:
+                simplified_changes[-1] += change
+            elif change * simplified_changes[-1] >= 0:
+                simplified_changes[-1] += change
+            else:
+                simplified_changes.append(change)
+        if simplified_changes[0] == 0.0:
+            simplified_changes = simplified_changes[1:]
+        return simplified_changes
 
 
 class Point:
@@ -414,6 +572,12 @@ def nan2none(value: float) -> Optional[float]:
     return value
 
 
+def elevation(point: Point) -> float:
+    """Return point elevation. Raise an error if a point has no elevation."""
+    assert point.elevation is not None, "Point has no elevation"
+    return point.elevation
+
+
 if __name__ == "__main__":
     gpx_str = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
         <gpx
@@ -425,6 +589,7 @@ if __name__ == "__main__":
             <trk><trkseg>
                 <trkpt lat="51.1234" lon="0.5678"><ele>100</ele><time>2024-04-19T12:00:00Z</time></trkpt>
                 <trkpt lat="51.4567" lon="0.5879"><ele>150</ele><time>2024-04-19T12:00:00Z</time></trkpt>
+                <trkpt lat="51.2345" lon="0.5789"><ele>120</ele><time>2024-04-19T12:00:00Z</time></trkpt>
             </trkseg></trk>
         </gpx>
     """
@@ -435,5 +600,7 @@ if __name__ == "__main__":
     new_gpx_xml = gpx.to_xml()
     print(ET.tostring(new_gpx_xml, default_namespace=GPX.ns).decode())
     print("Length:", round(gpx.length()), "m")
-    print("Length:", round(gpx.min_elevation()), "m")
-    print("Length:", round(gpx.max_elevation()), "m")
+    print("Min elevation:", round(gpx.min_elevation()), "m")
+    print("Max elevation:", round(gpx.max_elevation()), "m")
+    print("Elevation gain:", round(gpx.elevation_gain()), "m")
+    print("Elevation loss:", round(gpx.elevation_loss()), "m")
