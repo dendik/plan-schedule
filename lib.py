@@ -1,3 +1,5 @@
+"""GPX processing library
+"""
 import math
 import xml.etree.ElementTree as ET
 from math import atan2
@@ -70,6 +72,33 @@ class GPX:
             gpx.append(track.to_xml())
         return gpx
 
+    def length(self) -> float:
+        """
+        Calculate the total length of all tracks in the GPX file.
+
+        Returns:
+            float: Total length of all tracks in meters.
+        """
+        return sum(track.length() for track in self.tracks)
+
+    def min_elevation(self) -> float:
+        """
+        Calculate the minimum elevation among all points in all tracks of the GPX file.
+
+        Returns:
+            float: Minimum elevation in the GPX file.
+        """
+        return min(track.min_elevation() for track in self.tracks)
+
+    def max_elevation(self) -> float:
+        """
+        Calculate the maximum elevation among all points in all tracks of the GPX file.
+
+        Returns:
+            float: Maximum elevation in the GPX file.
+        """
+        return max(track.max_elevation() for track in self.tracks)
+
 
 class Track:
     """
@@ -129,6 +158,33 @@ class Track:
                 self.segments.pop(n)
                 return
 
+    def length(self) -> float:
+        """
+        Calculate the total length of all segments in the track.
+
+        Returns:
+            float: Total length of all segments in meters.
+        """
+        return sum(segment.length() for segment in self.segments)
+
+    def min_elevation(self) -> float:
+        """
+        Calculate the minimum elevation among all points in all segments of the track.
+
+        Returns:
+            float: Minimum elevation in the track.
+        """
+        return min(segment.min_elevation() for segment in self.segments)
+
+    def max_elevation(self) -> float:
+        """
+        Calculate the maximum elevation among all points in all segments of the track.
+
+        Returns:
+            float: Maximum elevation in the track.
+        """
+        return max(segment.max_elevation() for segment in self.segments)
+
 
 class Segment:
     """
@@ -187,6 +243,40 @@ class Segment:
         segment_a_points = self.points[: index + 1]
         segment_b_points = self.points[index:]
         return Segment(segment_a_points), Segment(segment_b_points)
+
+    def length(self) -> float:
+        """
+        Calculate the length of the segment.
+
+        Returns:
+            float: Length of the segment in meters.
+        """
+        return sum(
+            point_a.haversine_distance(point_b)
+            for point_a, point_b in zip(self.points, self.points[1:])
+        )
+
+    def min_elevation(self) -> float:
+        """
+        Calculate the minimum elevation among all points in the segment.
+
+        Returns:
+            float: Minimum elevation in the segment.
+        """
+        return min(
+            point.elevation for point in self.points if point.elevation is not None
+        )
+
+    def max_elevation(self) -> float:
+        """
+        Calculate the maximum elevation among all points in the segment.
+
+        Returns:
+            float: Maximum elevation in the segment.
+        """
+        return max(
+            point.elevation for point in self.points if point.elevation is not None
+        )
 
 
 class Point:
@@ -334,6 +424,7 @@ if __name__ == "__main__":
             version="1.1">
             <trk><trkseg>
                 <trkpt lat="51.1234" lon="0.5678"><ele>100</ele><time>2024-04-19T12:00:00Z</time></trkpt>
+                <trkpt lat="51.4567" lon="0.5879"><ele>150</ele><time>2024-04-19T12:00:00Z</time></trkpt>
             </trkseg></trk>
         </gpx>
     """
@@ -343,3 +434,6 @@ if __name__ == "__main__":
     # Convert GPX object back to XML
     new_gpx_xml = gpx.to_xml()
     print(ET.tostring(new_gpx_xml, default_namespace=GPX.ns).decode())
+    print("Length:", round(gpx.length()), "m")
+    print("Length:", round(gpx.min_elevation()), "m")
+    print("Length:", round(gpx.max_elevation()), "m")
