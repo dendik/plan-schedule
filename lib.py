@@ -118,6 +118,18 @@ class GPX:
         for track in self.tracks:
             yield from track.itersegments()
 
+    def split_at_point(self, point: "TrackPoint") -> None:
+        """
+        Split one of tracks into multiple segments at the given point.
+
+        Args:
+            point (TrackPoint): The point at which to split the track.
+        """
+        for track in self.tracks:
+            if point in track.itertrackpoints():
+                track.split_at_point(point)
+                return
+
     def length(self) -> float:
         """
         Calculate the total length of all tracks in the GPX file.
@@ -183,7 +195,7 @@ class Track:
     Represents a track in a GPX file.
     """
 
-    def __init__(self, segments: List["Segment"]):
+    def __init__(self, segments: List["Segment"]) -> None:
         """
         Initialize a Track object.
 
@@ -193,7 +205,7 @@ class Track:
         self.segments = segments
 
     @classmethod
-    def from_xml(cls, xml_element: Element):
+    def from_xml(cls, xml_element: Element) -> "Track":
         """
         Parse XML Element to create a Track object.
 
@@ -221,22 +233,7 @@ class Track:
             track.append(segment.to_xml())
         return track
 
-    def split_track_at_point(self, point: "TrackPoint"):
-        """
-        Split the track into multiple segments at the given point.
-
-        Args:
-            point (TrackPoint): The point at which to split the track.
-        """
-        for n, segment in enumerate(self.segments):
-            if point in segment.points:
-                segment_a, segment_b = segment.split_segment_at_point(point)
-                self.segments.insert(n, segment_a)
-                self.segments.insert(n, segment_b)
-                self.segments.pop(n)
-                return
-
-    def itertrackpoints(self) -> Iterator["Point"]:
+    def itertrackpoints(self) -> Iterator["TrackPoint"]:
         """
         Iterate over all points in the track.
 
@@ -254,6 +251,19 @@ class Track:
             Segment: Each segment in the track.
         """
         yield from self.segments
+
+    def split_at_point(self, point: "TrackPoint") -> None:
+        """
+        Split the track into multiple segments at the given point.
+
+        Args:
+            point (TrackPoint): The point at which to split the track.
+        """
+        for n, segment in enumerate(self.segments):
+            if point in segment.points:
+                segment_a, segment_b = segment.split_at_point(point)
+                self.segments[n : n + 1] = [segment_a, segment_b]
+                return
 
     def length(self) -> float:
         """
@@ -360,9 +370,7 @@ class Segment:
             segment.append(point.to_xml())
         return segment
 
-    def split_segment_at_point(
-        self, point: "TrackPoint"
-    ) -> Tuple["Segment", "Segment"]:
+    def split_at_point(self, point: "TrackPoint") -> Tuple["Segment", "Segment"]:
         """
         Split the segment into two segments at the given point.
 
@@ -616,12 +624,11 @@ class Point:
         nearest_point = None
 
         for track in tracks:
-            for segment in track.segments:
-                for track_point in segment.points:
-                    distance = self.haversine_distance(track_point)
-                    if distance < min_distance:
-                        min_distance = distance
-                        nearest_point = track_point
+            for track_point in track.itertrackpoints():
+                distance = self.haversine_distance(track_point)
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_point = track_point
 
         assert nearest_point is not None, "Could not find nearest point"
         return nearest_point
