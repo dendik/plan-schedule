@@ -5,6 +5,7 @@ from math import cos
 from math import radians
 from math import sin
 from math import sqrt
+from pathlib import Path
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -24,13 +25,13 @@ class GPX:
     ns = "http://www.topografix.com/GPX/1/1"
     nsmap = dict(gpx=ns)
 
-    def __init__(self, tracks: List["Track"], waypoints: List["Point"]):
+    def __init__(self, tracks: List["Track"], waypoints: List["WayPoint"]):
         """
         Initialize a GPX object.
 
         Args:
             tracks (List[Track]): List of tracks in the GPX file.
-            waypoints (List[Point]): List of waypoints in the GPX file.
+            waypoints (List[WayPoint]): List of waypoints in the GPX file.
         """
         self.tracks = tracks
         self.waypoints = waypoints
@@ -51,10 +52,23 @@ class GPX:
             for track_xml in xml_element.findall("gpx:trk", cls.nsmap)
         ]
         waypoints = [
-            Point.from_xml(waypoint_xml)
+            WayPoint.from_xml(waypoint_xml)
             for waypoint_xml in xml_element.findall("gpx:wpt", cls.nsmap)
         ]
         return cls(tracks, waypoints)
+
+    @classmethod
+    def from_xml_path(cls, file_path: str | Path) -> "GPX":
+        """
+        Create a GPX object by parsing an XML file.
+
+        Args:
+            file_path (str | Path): Path to the XML file.
+
+        Returns:
+            GPX: Parsed GPX object.
+        """
+        return cls.from_xml(ET.parse(str(file_path)).getroot())
 
     def to_xml(self) -> Element:
         """
@@ -69,6 +83,19 @@ class GPX:
         for track in self.tracks:
             gpx.append(track.to_xml())
         return gpx
+
+    def to_xml_path(self, file_path: str) -> None:
+        """
+        Write the GPX data to an XML file.
+
+        Args:
+            file_path (str): Path to the output XML file.
+        """
+        tree = ET.ElementTree(self.to_xml())
+        with open(file_path, "wb") as file:
+            tree.write(
+                file, encoding="utf-8", xml_declaration=True, default_namespace=self.ns
+            )
 
     def length(self) -> float:
         """
@@ -173,12 +200,12 @@ class Track:
             track.append(segment.to_xml())
         return track
 
-    def split_track_at_point(self, point: "Point"):
+    def split_track_at_point(self, point: "TrackPoint"):
         """
         Split the track into multiple segments at the given point.
 
         Args:
-            point (Point): The point at which to split the track.
+            point (TrackPoint): The point at which to split the track.
         """
         for n, segment in enumerate(self.segments):
             if point in segment.points:
@@ -255,12 +282,12 @@ class Segment:
     Represents a segment of track points in a GPX file.
     """
 
-    def __init__(self, points: List["Point"]):
+    def __init__(self, points: List["TrackPoint"]):
         """
         Initialize a Segment object.
 
         Args:
-            points (List[Point]): List of points in the segment.
+            points (List[TrackPoint]): List of points in the segment.
         """
         self.points = points
 
@@ -276,7 +303,7 @@ class Segment:
             Segment: Parsed Segment object.
         """
         points = [
-            Point.from_xml(point_xml)
+            TrackPoint.from_xml(point_xml)
             for point_xml in xml_element.findall("gpx:trkpt", GPX.nsmap)
         ]
         return cls(points)
@@ -293,12 +320,14 @@ class Segment:
             segment.append(point.to_xml())
         return segment
 
-    def split_segment_at_point(self, point: "Point") -> Tuple["Segment", "Segment"]:
+    def split_segment_at_point(
+        self, point: "TrackPoint"
+    ) -> Tuple["Segment", "Segment"]:
         """
         Split the segment into two segments at the given point.
 
         Args:
-            point (Point): The point at which to split the segment.
+            point (TrackPoint): The point at which to split the segment.
 
         Returns:
             List[Segment]: The two new segments resulting from the split.
@@ -436,7 +465,7 @@ class Segment:
 
 class Point:
     """
-    Represents a waypoint in a GPX file.
+    Represent any point in a GPX file.
     """
 
     latitude: float
@@ -446,6 +475,7 @@ class Point:
 
     def __init__(
         self,
+        type: str,
         latitude: float,
         longitude: float,
         elevation: Optional[float] = None,
@@ -460,6 +490,7 @@ class Point:
             elevation (float, optional): Elevation of the point. Defaults to None.
             timestamp (str, optional): Timestamp of the point. Defaults to None.
         """
+        self.type = type
         self.latitude = latitude
         self.longitude = longitude
         self.elevation = elevation
@@ -476,11 +507,12 @@ class Point:
         Returns:
             Point: Parsed Point object.
         """
+        type = xml_element.tag
         latitude = float(xml_element.attrib["lat"])
         longitude = float(xml_element.attrib["lon"])
         elevation = float(xml_element.findtext("gpx:ele", "NaN", GPX.nsmap))
         timestamp = xml_element.findtext("gpx:time", None, GPX.nsmap)
-        return cls(latitude, longitude, nan2none(elevation), timestamp)
+        return cls(type, latitude, longitude, nan2none(elevation), timestamp)
 
     def to_xml(self) -> Element:
         """
@@ -490,7 +522,7 @@ class Point:
             Element: XML Element representing the point.
         """
         point = GPXElement(
-            "wpt",
+            self.type,
             attrib={"lat": str(self.latitude), "lon": str(self.longitude)},
         )
         if self.elevation is not None:
@@ -528,7 +560,7 @@ class Point:
         distance = earth_radius_m * c
         return distance
 
-    def find_nearest_track_point(self, tracks: List[Track]) -> "Point":
+    def find_nearest_track_point(self, tracks: List[Track]) -> "TrackPoint":
         """
         Find the nearest track point to the current point from a list of tracks.
 
@@ -551,6 +583,36 @@ class Point:
 
         assert nearest_point is not None, "Could not find nearest point"
         return nearest_point
+
+
+class WayPoint(Point):
+    """
+    Represent a waypoint in a GPX file.
+    """
+
+    def __init__(
+        self,
+        latitude: float,
+        longitude: float,
+        elevation: float | None = None,
+        timestamp: str | None = None,
+    ):
+        super().__init__("wpt", latitude, longitude, elevation, timestamp)
+
+
+class TrackPoint(Point):
+    """
+    Represent a waypoint in a GPX file.
+    """
+
+    def __init__(
+        self,
+        latitude: float,
+        longitude: float,
+        elevation: float | None = None,
+        timestamp: str | None = None,
+    ):
+        super().__init__("trkpt", latitude, longitude, elevation, timestamp)
 
 
 class GPXElement(Element):

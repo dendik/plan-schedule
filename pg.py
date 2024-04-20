@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import argparse
-import xml.etree.ElementTree as ET
+from typing import Optional
 
 from lib import GPX
 
 
-def ele(elevation: float, plus: str = "") -> str:
+def ele(elevation: Optional[float], plus: str = "") -> str:
     """Represent elevation nicely"""
+    assert elevation is not None
     return f"{round(elevation, args.round):{plus}.0f}"
 
 
@@ -29,7 +30,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     for filename in args.tracks:
-        gpx = GPX.from_xml(ET.parse(filename).getroot())
+        gpx = GPX.from_xml_path(filename)
         for n, segment in enumerate(
             (segment for track in gpx.tracks for segment in track.segments), start=1
         ):
